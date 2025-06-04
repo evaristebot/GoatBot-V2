@@ -1,0 +1,78 @@
+module.exports = {
+  config: {
+    name: "promote",
+    version: "1.0",
+    author: "Samir",
+    description: "Commande pour se faire promouvoir admin par le bot",
+    usage: "[promote @mention ou uid]",
+    cooldown: 30,
+    permissions: [2] // Seuls les admins du bot peuvent utiliser cette commande
+  },
+
+  onStart: async function({ api, event, args, message, threadsData }) {
+    const { threadID, messageID, senderID, mentions } = event;
+    const botAdmins = global.GoatBot.config.adminBot || [];
+
+    // Vérifier si l'utilisateur est un admin du bot
+    if (!botAdmins.includes(senderID)) {
+      return api.sendMessage(
+        "❌ Vous n'avez pas la permission d'utiliser cette commande",
+        threadID,
+        messageID
+      );
+    }
+
+    // Récupérer l'ID cible
+    let targetID;
+    if (Object.keys(mentions).length > 0) {
+      targetID = Object.keys(mentions)[0];
+    } else if (args[0]) {
+      targetID = args[0];
+    } else {
+      targetID = senderID; // Se promouvoir soi-même si aucune cible spécifiée
+    }
+
+    try {
+      // Vérifier si le bot est admin
+      const threadInfo = await api.getThreadInfo(threadID);
+      const isBotAdmin = threadInfo.adminIDs.some(admin => admin.id == api.getCurrentUserID());
+
+      if (!isBotAdmin) {
+        return api.sendMessage(
+          "❌ Le bot doit être administrateur pour effectuer cette action",
+          threadID,
+          messageID
+        );
+      }
+
+      // Promouvoir l'utilisateur
+      await api.changeAdminStatus(threadID, targetID, true);
+      
+      const name = mentions[targetID] || targetID;
+      api.sendMessage(
+        `✅ ${name} a été promu administrateur avec succès`,
+        threadID,
+        messageID
+      );
+
+      // Journalisation
+      const logThreadID = global.GoatBot.config.logGroupID;
+      if (logThreadID) {
+        api.sendMessage(
+          `📌 Promotion admin effectuée par ${senderID}\n` +
+          `• Groupe: ${threadInfo.name || threadID}\n` +
+          `• Nouvel admin: ${targetID}`,
+          logThreadID
+        );
+      }
+
+    } catch (error) {
+      console.error("Erreur promotion admin:", error);
+      api.sendMessage(
+        "❌ Une erreur s'est produite lors de la promotion",
+        threadID,
+        messageID
+      );
+    }
+  }
+};
